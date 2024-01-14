@@ -10,16 +10,16 @@ import diskUtils
 
 class CheckErasure:
     def __init__(self):
-        parser = argparse.ArgumentParser(description="A script for checking disk erasure progress for easy resumption.")
+        self.parser = argparse.ArgumentParser(description="A script for checking disk erasure progress for easy resumption.")
 
-        parser.add_argument(
+        self.parser.add_argument(
                 '-d',
                 '--device',
                 required=True,
                 help='The target device or file.'
                 )
 
-        parser.add_argument(
+        self.parser.add_argument(
                 '-s',
                 '--slices',
                 default=100,
@@ -28,13 +28,42 @@ class CheckErasure:
                 )
 
 
-        self.args, self.unknownargs = parser.parse_known_args()
+        self.args, self.unknownargs = self.parser.parse_known_args()
+
+        self.deviceType = 'Device'
+
+        if os.path.isfile(self.args.device):
+            self.deviceType = 'File'
+
 
     def main(self):
-        if   self.args.device == None:
-            print('Please specify a --device')
+        if self.args.device in [None,'']:
+            print('Please specify a valid --device')
+            self.parser.print_help()
+            exit(1)
 
-        print(diskUtils.getTotalBytes(self.args.device))
+        self.deviceTotalBytes = diskUtils.getTotalBytes(self.args.device)
+        self.deviceSliceSize  = int(self.deviceTotalBytes / self.args.slices)
+
+        self.deviceBlockSize = diskUtils.getBlockSize(self.args.device)
+        print('%s block size is %s' % (self.deviceType,str(self.deviceBlockSize)))
+
+        # Add an extra slice if byte count not perfectly divisible by the desired slice count.
+        #if not self.deviceTotalBytes % self.args.slices == 0:
+        #    self.deviceTotalSlices = self.deviceTotalSlices + 1
+        print("Checking %s slices of %s %s to determine if wiped." % (self.args.slices, self.deviceType, self.args.device))
+        sliceProgress = 0
+        while sliceProgress <= self.args.slices:
+            targetOffset = self.deviceSliceSize * sliceProgress
+            progressPercentage = round(sliceProgress / self.args.slices * 100)
+            read = diskUtils.readFromOffset(self.args.device, targetOffset)
+            if set(read) != {0}:
+                print('[%s%%] Block not empty: %s' % (str(progressPercentage),targetOffset))
+
+            print('[%s%%] [%s/%s] scanned.' % (str(progressPercentage),sliceProgress,self.args.slices), end='\r')
+            sliceProgress = sliceProgress + 1
+
+        print() # Final newline
 
 if __name__ == "__main__":
     checkErasure = CheckErasure()
