@@ -15,6 +15,7 @@ class CheckErasure:
         parser.add_argument(
                 '-d',
                 '--device',
+                required=True,
                 help='The target device or file.'
                 )
 
